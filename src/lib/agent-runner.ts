@@ -1,6 +1,11 @@
 import * as fs from "node:fs";
 
-import { runAcpStream, runAcpSync } from "./acp-client.js";
+import {
+  runAcpStream,
+  runAcpSync,
+  runPersistentAcpStream,
+  runPersistentAcpSync,
+} from "./acp-client.js";
 import type { BridgeConfig } from "./config.js";
 import type { CursorExecutionMode } from "./execution-mode.js";
 import { run, runStreaming } from "./process.js";
@@ -28,6 +33,9 @@ function acpArgsWithModel(acpArgs: string[], model: string): string[] {
 function acpArgsWithMode(acpArgs: string[], mode: CursorExecutionMode): string[] {
   const i = acpArgs.indexOf("acp");
   if (i === -1) return acpArgs;
+  // Current Cursor Agent CLI treats ACP without an explicit mode as full agent mode;
+  // it only exposes explicit read-only modes for plan/ask.
+  if (mode === "agent") return acpArgs;
   return [...acpArgs.slice(0, i + 1), "--mode", mode, ...acpArgs.slice(i + 1)];
 }
 
@@ -63,15 +71,18 @@ export function runAgentSync(
   if (config.useAcp && typeof stdinPrompt === "string") {
     const acpModel = extractModelFromCmdArgs(cmdArgs);
     const acpMode = extractModeFromCmdArgs(cmdArgs);
-    let args = acpArgsWithWorkspace(config.acpArgs, workspaceDir);
+    const acpProcessWorkspace = config.persistentAcp ? config.workspace : workspaceDir;
+    let args = acpArgsWithWorkspace(config.acpArgs, acpProcessWorkspace);
     args = acpModel ? acpArgsWithModel(args, acpModel) : args;
     args = acpArgsWithMode(args, acpMode);
     const acpEnv = { ...config.acpEnv };
     if (effectiveChatOnly) {
       Object.assign(acpEnv, getChatOnlyEnvOverrides(workspaceDir, configDir));
     }
-    return runAcpSync(config.acpCommand, args, stdinPrompt, {
+    const runAcp = config.persistentAcp ? runPersistentAcpSync : runAcpSync;
+    return runAcp(config.acpCommand, args, stdinPrompt, {
       cwd: workspaceDir,
+      processCwd: acpProcessWorkspace,
       timeoutMs: config.timeoutMs,
       env: acpEnv,
       model: acpModel,
@@ -132,19 +143,22 @@ export function runAgentStream(
   if (config.useAcp && typeof stdinPrompt === "string") {
     const acpModel = extractModelFromCmdArgs(cmdArgs);
     const acpMode = extractModeFromCmdArgs(cmdArgs);
-    let args = acpArgsWithWorkspace(config.acpArgs, workspaceDir);
+    const acpProcessWorkspace = config.persistentAcp ? config.workspace : workspaceDir;
+    let args = acpArgsWithWorkspace(config.acpArgs, acpProcessWorkspace);
     args = acpModel ? acpArgsWithModel(args, acpModel) : args;
     args = acpArgsWithMode(args, acpMode);
     const acpEnv = { ...config.acpEnv };
     if (effectiveChatOnly) {
       Object.assign(acpEnv, getChatOnlyEnvOverrides(workspaceDir, configDir));
     }
-    return runAcpStream(
+    const runAcp = config.persistentAcp ? runPersistentAcpStream : runAcpStream;
+    return runAcp(
       config.acpCommand,
       args,
       stdinPrompt,
       {
         cwd: workspaceDir,
+        processCwd: acpProcessWorkspace,
         timeoutMs: config.timeoutMs,
         env: acpEnv,
         model: acpModel,

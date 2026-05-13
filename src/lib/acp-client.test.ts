@@ -1,9 +1,13 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   resolveAcpModelConfigValue,
   runAcpStream,
   runAcpSync,
+  runPersistentAcpSync,
+  shutdownPersistentAcpClients,
 } from "./acp-client.js";
 
 const node = process.execPath;
@@ -152,6 +156,38 @@ describe("runAcpSync", () => {
       env: { FAKE_ACP_SCENARIO: "fail_set_config" },
     });
     expect(result.code).toBe(1);
+  });
+});
+
+
+describe("runPersistentAcpSync", () => {
+  it("reuses one initialized ACP child while creating a fresh session per prompt", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-persist-test-"));
+    const eventsFile = join(dir, "events.log");
+    try {
+      const opts = {
+        cwd,
+        processCwd: cwd,
+        timeoutMs: 5000,
+        skipAuthenticate: true,
+        env: { FAKE_ACP_EVENTS_FILE: eventsFile },
+      };
+      const first = await runPersistentAcpSync(node, [fakeServerPath], "one", opts);
+      const second = await runPersistentAcpSync(node, [fakeServerPath], "two", opts);
+
+      expect(first.code).toBe(0);
+      expect(second.code).toBe(0);
+      expect(first.stdout).toContain("Hello from fake ACP");
+      expect(second.stdout).toContain("Hello from fake ACP");
+
+      const events = readFileSync(eventsFile, "utf8").trim().split("\n");
+      expect(events.filter((line) => line === "startup")).toHaveLength(1);
+      expect(events.filter((line) => line === "initialize")).toHaveLength(1);
+      expect(events.filter((line) => line === "session/new")).toHaveLength(2);
+    } finally {
+      await shutdownPersistentAcpClients();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

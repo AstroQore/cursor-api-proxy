@@ -7,9 +7,17 @@
  *
  * Emits to stderr for assertions: __FAKE_ACP_SET_CONFIG__:<json>\n
  */
+import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const scenario = process.env.FAKE_ACP_SCENARIO || "";
+const eventsFile = process.env.FAKE_ACP_EVENTS_FILE || "";
+
+function recordEvent(name) {
+  if (eventsFile) appendFileSync(eventsFile, `${name}\n`);
+}
+
+recordEvent("startup");
 
 function sessionNewResult() {
   if (scenario === "empty_models") {
@@ -55,9 +63,15 @@ rl.on("line", (line) => {
       }
 
       let result = {};
-      if (msg.method === "initialize") result = { protocolVersion: 1 };
+      if (msg.method === "initialize") {
+        recordEvent("initialize");
+        result = { protocolVersion: 1 };
+      }
       else if (msg.method === "authenticate") result = {};
-      else if (msg.method === "session/new") result = sessionNewResult();
+      else if (msg.method === "session/new") {
+        recordEvent("session/new");
+        result = sessionNewResult();
+      }
       else if (msg.method === "session/set_config_option") result = {};
       else if (msg.method === "session/prompt") {
         result = {};

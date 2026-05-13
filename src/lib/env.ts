@@ -43,6 +43,8 @@ export type LoadedEnv = {
   promptViaStdin: boolean;
   /** When true, use ACP (Agent Client Protocol) over stdio instead of CLI argv (fixes prompt delivery on Windows). */
   useAcp: boolean;
+  /** When true, keep ACP child processes warm and reuse them across prompts. */
+  persistentAcp: boolean;
   /** Pool of cursor configuration directories for round-robin account rotation. */
   configDirs: string[];
   /** When true, runs each config dir on its own incrementing port starting from `port` */
@@ -290,6 +292,11 @@ export function loadEnvConfig(opts: EnvOptions = {}): LoadedEnv {
     maxMode: envBool(env, ["CURSOR_BRIDGE_MAX_MODE"], false),
     promptViaStdin: envBool(env, ["CURSOR_BRIDGE_PROMPT_VIA_STDIN"], false),
     useAcp: envBool(env, ["CURSOR_BRIDGE_USE_ACP"], false),
+    persistentAcp: envBool(
+      env,
+      ["CURSOR_BRIDGE_PERSISTENT_ACP", "CURSOR_BRIDGE_ACP_PERSISTENT"],
+      false,
+    ),
     configDirs,
     multiPort: envBool(env, ["CURSOR_BRIDGE_MULTI_PORT"], false),
     winCmdlineMax,

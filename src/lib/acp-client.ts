@@ -5,7 +5,7 @@
  */
 
 import * as readline from "node:readline";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { debuglog } from "node:util";
 
 import { trackChildProcess } from "./process.js";
@@ -14,6 +14,8 @@ const debugAcp = debuglog("cursor-api-proxy:acp");
 
 export type AcpRunOptions = {
   cwd: string;
+  /** Stable cwd for the long-lived ACP child. Defaults to cwd for one-shot runs. */
+  processCwd?: string;
   timeoutMs: number;
   env?: Record<string, string | undefined>;
   /** When set, call session/set_config_option for "model" after session/new (ACP session config). */
@@ -261,6 +263,360 @@ function sendRequest(
 function respond(stdin: NodeJS.WritableStream, id: number, result: object): void {
   const line = JSON.stringify({ jsonrpc: "2.0", id, result }) + "\n";
   stdin.write(line, "utf8");
+}
+
+
+type AcpPending = Map<
+  number,
+  { resolve: (value: unknown) => void; reject: (err: Error) => void; timerId?: ReturnType<typeof setTimeout> }
+>;
+
+type AcpSessionNewResult = {
+  sessionId?: string;
+  models?: { availableModels?: AcpAvailableModel[] };
+};
+
+class PersistentAcpClient {
+  private child?: ChildProcessWithoutNullStreams;
+  private rl?: readline.Interface;
+  private nextId = { current: 1 };
+  private pending: AcpPending = new Map();
+  private stderr = "";
+  private startPromise?: Promise<void>;
+  private serial: Promise<void> = Promise.resolve();
+  private activeChunkHandler?: (text: string) => void;
+
+  constructor(
+    private readonly command: string,
+    private readonly args: string[],
+    private readonly baseOpts: AcpRunOptions,
+  ) {}
+
+  runSync(prompt: string, opts: AcpRunOptions): Promise<AcpSyncResult> {
+    let accumulated = "";
+    return this.runPrompt(prompt, opts, (text) => {
+      accumulated += text;
+    }).then((result) => ({
+      code: result.code,
+      stdout: accumulated.trim(),
+      stderr: result.stderr.trim(),
+    }));
+  }
+
+  runStream(
+    prompt: string,
+    opts: AcpRunOptions,
+    onChunk: (text: string) => void,
+  ): Promise<AcpStreamResult> {
+    return this.runPrompt(prompt, opts, onChunk).then((result) => ({
+      code: result.code,
+      stderr: result.stderr.trim(),
+    }));
+  }
+
+  async close(): Promise<void> {
+    await this.serial.catch(() => undefined);
+    this.restart(new Error("ACP persistent client closed"));
+  }
+
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.serial.catch(() => undefined).then(task);
+    this.serial = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private async runPrompt(
+    prompt: string,
+    opts: AcpRunOptions,
+    onChunk: (text: string) => void,
+  ): Promise<{ code: number; stderr: string }> {
+    return this.enqueue(async () => {
+      const effectiveOpts = { ...this.baseOpts, ...opts };
+      const stderrStart = this.stderr.length;
+
+      try {
+        await this.withRunGuards(effectiveOpts, async () => {
+          await this.ensureStarted(effectiveOpts);
+          const child = this.child;
+          if (!child?.stdin) throw new Error("ACP child is not writable");
+
+          this.activeChunkHandler = onChunk;
+
+          debugAcp("ACP persistent step: session/new");
+          const sessionResult = (await this.request(
+            "session/new",
+            { cwd: effectiveOpts.cwd, mcpServers: [] },
+            effectiveOpts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+          )) as AcpSessionNewResult;
+          const sessionId = sessionResult?.sessionId;
+          if (!sessionId) throw new Error("ACP session/new returned no sessionId");
+
+          if (effectiveOpts.model) {
+            const resolvedModelId = resolveAcpModelConfigValue(
+              effectiveOpts.model,
+              sessionResult.models?.availableModels,
+            );
+            if (resolvedModelId !== "default" && resolvedModelId !== "default[]") {
+              debugAcp("ACP persistent step: session/set_config_option (model)");
+              await this.request(
+                "session/set_config_option",
+                { sessionId, configId: "model", value: resolvedModelId },
+                effectiveOpts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+              );
+            } else {
+              debugAcp(
+                "ACP persistent step: session/set_config_option (model) skipped",
+              );
+            }
+          }
+
+          debugAcp("ACP persistent step: session/prompt");
+          await this.request(
+            "session/prompt",
+            { sessionId, prompt: [{ type: "text", text: prompt }] },
+            effectiveOpts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+          );
+        });
+
+        return { code: 0, stderr: this.stderr.slice(stderrStart) };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        debugAcp("ACP persistent run failed: %s", message);
+        this.restart(err instanceof Error ? err : new Error(message));
+        const stderr = this.stderr.slice(stderrStart) || message;
+        return {
+          code: effectiveOpts.signal?.aborted ? 499 : 1,
+          stderr,
+        };
+      } finally {
+        this.activeChunkHandler = undefined;
+      }
+    });
+  }
+
+  private async withRunGuards<T>(
+    opts: AcpRunOptions,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let abortHandler: (() => void) | undefined;
+
+    const guard = new Promise<never>((_, reject) => {
+      if (opts.timeoutMs > 0) {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`ACP persistent prompt timed out after ${opts.timeoutMs}ms`));
+        }, opts.timeoutMs);
+      }
+      if (opts.signal) {
+        abortHandler = () => reject(new Error("ACP persistent prompt aborted"));
+        if (opts.signal.aborted) abortHandler();
+        else opts.signal.addEventListener("abort", abortHandler, { once: true });
+      }
+    });
+
+    try {
+      return await Promise.race([task(), guard]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (opts.signal && abortHandler) {
+        opts.signal.removeEventListener("abort", abortHandler);
+      }
+    }
+  }
+
+  private async ensureStarted(opts: AcpRunOptions): Promise<void> {
+    if (this.child && !this.child.killed && this.startPromise) {
+      return this.startPromise;
+    }
+
+    const child = spawn(this.command, this.args, {
+      cwd: opts.processCwd ?? opts.cwd,
+      env: buildAcpSpawnEnv(opts.env),
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsVerbatimArguments: opts.spawnOptions?.windowsVerbatimArguments,
+    });
+    trackChildProcess(child);
+
+    this.child = child;
+    this.nextId = { current: 1 };
+    this.pending = new Map();
+    this.stderr = "";
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      this.stderr += chunk;
+    });
+
+    this.rl = readline.createInterface({ input: child.stdout });
+    this.rl.on("line", (line: string) => this.handleLine(line));
+
+    child.on("error", (err) => {
+      this.restart(err instanceof Error ? err : new Error(String(err)));
+    });
+    child.on("close", (code) => {
+      if (this.child === child) {
+        this.rejectPending(new Error(`ACP child exited with code ${code ?? 1}`));
+        this.child = undefined;
+        this.startPromise = undefined;
+        this.rl?.close();
+        this.rl = undefined;
+      }
+    });
+
+    this.startPromise = (async () => {
+      debugAcp("ACP persistent step: initialize");
+      await this.request("initialize", {
+        protocolVersion: 1,
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+        },
+        clientInfo: { name: "cursor-api-proxy", version: "0.1.0" },
+      }, opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
+
+      if (!opts.skipAuthenticate) {
+        debugAcp("ACP persistent step: authenticate");
+        await this.request("authenticate", { methodId: "cursor_login" }, opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
+      } else {
+        debugAcp("ACP persistent step: authenticate (skipped, pre-authenticated)");
+      }
+    })().catch((err) => {
+      this.restart(err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    });
+
+    return this.startPromise;
+  }
+
+  private request(
+    method: string,
+    params: object,
+    requestTimeoutMs: number,
+  ): Promise<unknown> {
+    const child = this.child;
+    if (!child?.stdin) return Promise.reject(new Error("ACP child is not writable"));
+    return sendRequest(child.stdin, this.nextId, method, params, this.pending, requestTimeoutMs);
+  }
+
+  private handleLine(line: string): void {
+    try {
+      if (this.baseOpts.rawDebug) debugAcp("ACP raw: %s", line);
+      const msg = parseAcpStdoutLine(line);
+      if (!msg) return;
+
+      if (msg.id != null && (msg.result !== undefined || msg.error !== undefined)) {
+        const reqId = typeof msg.id === "number" ? msg.id : Number(msg.id);
+        const waiter = Number.isFinite(reqId) ? this.pending.get(reqId) : undefined;
+        if (waiter) {
+          this.pending.delete(reqId);
+          if (msg.error) waiter.reject(new Error(msg.error.message ?? "ACP error"));
+          else waiter.resolve(msg.result);
+        }
+        return;
+      }
+
+      handleAcpNotification(msg, {
+        rawDebug: this.baseOpts.rawDebug,
+        stdin: this.child?.stdin,
+        onAgentTextChunk: (text) => this.activeChunkHandler?.(text),
+      });
+    } catch {
+      /* ignore notification handler errors */
+    }
+  }
+
+  private rejectPending(err: Error): void {
+    for (const [id, waiter] of Array.from(this.pending.entries())) {
+      this.pending.delete(id);
+      if (waiter.timerId) clearTimeout(waiter.timerId);
+      waiter.reject(err);
+    }
+  }
+
+  private restart(err: Error): void {
+    this.rejectPending(err);
+    const child = this.child;
+    this.child = undefined;
+    this.startPromise = undefined;
+    this.activeChunkHandler = undefined;
+    try {
+      this.rl?.close();
+    } catch {
+      /* ignore */
+    }
+    this.rl = undefined;
+    try {
+      child?.stdin.end();
+      child?.kill("SIGKILL");
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+const persistentAcpClients = new Map<string, PersistentAcpClient>();
+
+function stableEnvKey(env?: Record<string, string | undefined>): Array<[string, string]> {
+  return Object.entries(env ?? {})
+    .filter((entry): entry is [string, string] => entry[1] !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
+function persistentAcpClientKey(
+  command: string,
+  args: string[],
+  opts: AcpRunOptions,
+): string {
+  return JSON.stringify({
+    command,
+    args,
+    processCwd: opts.processCwd ?? opts.cwd,
+    env: stableEnvKey(opts.env),
+    skipAuthenticate: !!opts.skipAuthenticate,
+    spawnOptions: opts.spawnOptions ?? null,
+  });
+}
+
+function getPersistentAcpClient(
+  command: string,
+  args: string[],
+  opts: AcpRunOptions,
+): PersistentAcpClient {
+  const key = persistentAcpClientKey(command, args, opts);
+  let client = persistentAcpClients.get(key);
+  if (!client) {
+    client = new PersistentAcpClient(command, args, opts);
+    persistentAcpClients.set(key, client);
+  }
+  return client;
+}
+
+export function runPersistentAcpSync(
+  command: string,
+  args: string[],
+  prompt: string,
+  opts: AcpRunOptions,
+): Promise<AcpSyncResult> {
+  return getPersistentAcpClient(command, args, opts).runSync(prompt, opts);
+}
+
+export function runPersistentAcpStream(
+  command: string,
+  args: string[],
+  prompt: string,
+  opts: AcpRunOptions,
+  onChunk: (text: string) => void,
+): Promise<AcpStreamResult> {
+  return getPersistentAcpClient(command, args, opts).runStream(prompt, opts, onChunk);
+}
+
+export async function shutdownPersistentAcpClients(): Promise<void> {
+  const clients = Array.from(persistentAcpClients.values());
+  persistentAcpClients.clear();
+  await Promise.all(clients.map((client) => client.close()));
 }
 
 /**

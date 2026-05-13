@@ -21,6 +21,7 @@ describe("loadBridgeConfig", () => {
     expect(config.chatOnlyWorkspaceExplicit).toBe(false);
     expect(config.sessionsLogPath).toBe(path.join("/workspace", "sessions.log"));
     expect(config.winCmdlineMax).toBe(30_000);
+    expect(config.persistentAcp).toBe(false);
   });
 
   it("assembles config from the centralized env layer", () => {
@@ -40,6 +41,7 @@ describe("loadBridgeConfig", () => {
         CURSOR_BRIDGE_VERBOSE: "1",
         CURSOR_BRIDGE_TLS_CERT: "./certs/test.crt",
         CURSOR_BRIDGE_TLS_KEY: "./certs/test.key",
+        CURSOR_BRIDGE_PERSISTENT_ACP: "true",
       },
       cwd: "/tmp/project",
     });
@@ -58,6 +60,7 @@ describe("loadBridgeConfig", () => {
     expect(config.chatOnlyWorkspace).toBe(false);
     expect(config.chatOnlyWorkspaceExplicit).toBe(true);
     expect(config.verbose).toBe(true);
+    expect(config.persistentAcp).toBe(true);
     expect(config.tlsCertPath).toBe(
       path.resolve("/tmp/project", "./certs/test.crt"),
     );

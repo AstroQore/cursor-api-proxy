@@ -39,6 +39,8 @@ export type BridgeConfig = {
   promptViaStdin: boolean;
   /** When true, use ACP (Agent Client Protocol) over stdio; fixes prompt delivery on Windows. */
   useAcp: boolean;
+  /** When true, reuse long-lived ACP children instead of spawning one child per prompt. */
+  persistentAcp?: boolean;
   /** Spawn options for ACP (e.g. windowsVerbatimArguments when using cmd.exe fallback). */
   acpSpawnOptions?: { windowsVerbatimArguments?: boolean };
   /** When true, skip ACP authenticate step (use when pre-authenticated via --api-key or agent login). */
@@ -90,6 +92,7 @@ export function loadBridgeConfig(opts: EnvOptions = {}): BridgeConfig {
     maxMode: env.maxMode,
     promptViaStdin: env.promptViaStdin,
     useAcp: env.useAcp,
+    persistentAcp: env.persistentAcp,
     acpSpawnOptions:
       acpResolved.windowsVerbatimArguments != null
         ? { windowsVerbatimArguments: acpResolved.windowsVerbatimArguments }
