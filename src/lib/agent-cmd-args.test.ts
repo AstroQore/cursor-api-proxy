@@ -23,6 +23,8 @@ function cfg(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     chatOnlyWorkspaceExplicit: false,
     verbose: false,
     apiContextGuard: false,
+    allowWorkspaceHints: false,
+    promptFormat: "transcript",
     maxMode: false,
     promptViaStdin: false,
     useAcp: false,

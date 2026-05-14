@@ -24,6 +24,8 @@ describe("loadEnvConfig", () => {
     expect(loaded.mode).toBeUndefined();
     expect(loaded.verbose).toBe(false);
     expect(loaded.commandShell).toBe("cmd.exe");
+    expect(loaded.allowWorkspaceHints).toBe(false);
+    expect(loaded.promptFormat).toBe("transcript");
     expect(loaded.maxMode).toBe(false);
     expect(loaded.promptViaStdin).toBe(false);
     expect(loaded.useAcp).toBe(false);
@@ -66,6 +68,18 @@ describe("loadEnvConfig", () => {
     expect(loaded.strictModel).toBe(false);
     expect(loaded.timeoutMs).toBe(60000);
     expect(loaded.defaultModel).toBe("claude-3-opus");
+  });
+
+  it("parses API-shaping toggles", () => {
+    const loaded = loadEnvConfig({
+      env: {
+        CURSOR_BRIDGE_ALLOW_WORKSPACE_HINTS: "true",
+        CURSOR_BRIDGE_PROMPT_FORMAT: "minimal",
+      },
+    });
+
+    expect(loaded.allowWorkspaceHints).toBe(true);
+    expect(loaded.promptFormat).toBe("minimal");
   });
 
   it("parses CURSOR_BRIDGE_MODE and marks chat-only env as explicit", () => {

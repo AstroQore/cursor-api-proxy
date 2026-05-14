@@ -1,4 +1,5 @@
 export type ApiContextWorkspaceKind = "isolated" | "explicit" | "configured";
+export type PromptFormat = "transcript" | "minimal";
 
 function buildApiContextGuardText(
   workspaceKind: ApiContextWorkspaceKind = "configured",
@@ -131,6 +132,7 @@ export function buildPromptFromMessages(
   opts: {
     apiContextGuard?: boolean;
     workspaceKind?: ApiContextWorkspaceKind;
+    promptFormat?: PromptFormat;
   } = {},
 ): string {
   const systemParts: string[] = opts.apiContextGuard
@@ -159,6 +161,25 @@ export function buildPromptFromMessages(
       convo.push(`Tool: ${text}`);
       continue;
     }
+  }
+
+  if (opts.promptFormat === "minimal" && !opts.apiContextGuard) {
+    if (systemParts.length === 0 && convo.length === 1) {
+      const only = convo[0];
+      if (only.startsWith("User: ")) return only.slice("User: ".length);
+    }
+
+    const parts: string[] = [];
+    if (systemParts.length > 0) {
+      parts.push(`[System]\n${systemParts.join("\n\n")}`);
+    }
+    for (const line of convo) {
+      const idx = line.indexOf(": ");
+      const role = idx >= 0 ? line.slice(0, idx) : "User";
+      const text = idx >= 0 ? line.slice(idx + 2) : line;
+      parts.push(`[${role}]\n${text}`);
+    }
+    return parts.join("\n\n");
   }
 
   const system = systemParts.length

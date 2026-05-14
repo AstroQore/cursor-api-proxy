@@ -71,6 +71,8 @@ function createTestConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     chatOnlyWorkspaceExplicit: false,
     verbose: false,
     apiContextGuard: false,
+    allowWorkspaceHints: false,
+    promptFormat: "transcript",
     maxMode: false,
     promptViaStdin: false,
     useAcp: false,
@@ -330,7 +332,7 @@ describe("startBridgeServer", () => {
     expect(data.error.code).toBe("invalid_mode");
   });
 
-  it("uses body cwd as an explicit workspace even when chat-only is configured", async () => {
+  it("ignores body cwd by default so the proxy behaves like a normal API provider", async () => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-ws-base-"));
     const sub = path.join(base, "project");
     fs.mkdirSync(sub, { recursive: true });
@@ -340,6 +342,40 @@ describe("startBridgeServer", () => {
         workspace: base,
         chatOnlyWorkspace: true,
         chatOnlyWorkspaceExplicit: true,
+      }),
+    });
+    await new Promise<void>((resolve) =>
+      servers[0].on("listening", () => resolve()),
+    );
+
+    const { status } = await fetchServer(servers[0], "/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "claude-3-opus",
+        cwd: sub,
+        messages: [{ role: "user", content: "List this directory" }],
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(status).toBe(200);
+    const runCall = vi.mocked(run).mock.calls.at(-1);
+    expect(runCall?.[2]?.cwd).not.toBe(fs.realpathSync(sub));
+    expect(runCall?.[1]).not.toContain(fs.realpathSync(sub));
+    expect(runCall?.[2]?.envOverrides).toBeDefined();
+  });
+
+  it("uses body cwd as an explicit workspace when workspace hints are enabled", async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-ws-base-"));
+    const sub = path.join(base, "project");
+    fs.mkdirSync(sub, { recursive: true });
+    servers = startBridgeServer({
+      version: "1.0.0",
+      config: createTestConfig({
+        workspace: base,
+        chatOnlyWorkspace: true,
+        chatOnlyWorkspaceExplicit: true,
+        allowWorkspaceHints: true,
       }),
     });
     await new Promise<void>((resolve) =>

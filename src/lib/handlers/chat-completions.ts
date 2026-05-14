@@ -115,10 +115,12 @@ export async function handleChatCompletions(
     return;
   }
 
-  const workspaceHint = workspaceHintFromRequest(
-    req.headers as Record<string, string | string[] | undefined>,
-    body as Record<string, unknown>,
-  );
+  const workspaceHint = config.allowWorkspaceHints
+    ? workspaceHintFromRequest(
+        req.headers as Record<string, string | string[] | undefined>,
+        body as Record<string, unknown>,
+      )
+    : undefined;
   const hasExplicitWorkspace = !!workspaceHint;
   const effectiveChatOnly = hasExplicitWorkspace
     ? false
@@ -144,6 +146,7 @@ export async function handleChatCompletions(
     : cleanMessages;
   const prompt = buildPromptFromMessages(messagesWithTools, {
     apiContextGuard: config.apiContextGuard,
+    promptFormat: config.promptFormat,
     workspaceKind: tempDir
       ? "isolated"
       : hasExplicitWorkspace

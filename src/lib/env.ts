@@ -5,6 +5,7 @@ import type { CursorExecutionMode } from "./execution-mode.js";
 import { tryParseExecutionModeEnv } from "./execution-mode.js";
 
 export type EnvSource = Record<string, string | undefined>;
+export type PromptFormat = "transcript" | "minimal";
 
 export type EnvOptions = {
   tailscale?: boolean;
@@ -39,6 +40,10 @@ export type LoadedEnv = {
   verbose: boolean;
   /** When true, prepend a guard that strips bridge workspace assumptions from the prompt. */
   apiContextGuard: boolean;
+  /** When true, honor non-standard cwd/workspace request hints on the proxy host. */
+  allowWorkspaceHints: boolean;
+  /** How OpenAI messages are flattened before being sent to Cursor CLI. */
+  promptFormat: PromptFormat;
   /** When true, set maxMode in cli-config.json before each run (larger context, more tools). */
   maxMode: boolean;
   /** When true, pass the user prompt via stdin instead of argv (avoids Windows argv truncation). */
@@ -114,6 +119,12 @@ function envNumber(
   if (raw == null) return defaultValue;
   const value = Number(raw);
   return Number.isFinite(value) ? value : defaultValue;
+}
+
+function envPromptFormat(env: EnvSource): PromptFormat {
+  const raw = envString(env, ["CURSOR_BRIDGE_PROMPT_FORMAT"]);
+  if (raw === "minimal") return "minimal";
+  return "transcript";
 }
 
 function normalizeModelId(raw: string | undefined): string {
@@ -290,6 +301,12 @@ export function loadEnvConfig(opts: EnvOptions = {}): LoadedEnv {
     mode,
     verbose: envBool(env, ["CURSOR_BRIDGE_VERBOSE"], false),
     apiContextGuard: envBool(env, ["CURSOR_BRIDGE_API_CONTEXT_GUARD"], false),
+    allowWorkspaceHints: envBool(
+      env,
+      ["CURSOR_BRIDGE_ALLOW_WORKSPACE_HINTS"],
+      false,
+    ),
+    promptFormat: envPromptFormat(env),
     maxMode: envBool(env, ["CURSOR_BRIDGE_MAX_MODE"], false),
     promptViaStdin: envBool(env, ["CURSOR_BRIDGE_PROMPT_VIA_STDIN"], false),
     useAcp: envBool(env, ["CURSOR_BRIDGE_USE_ACP"], false),

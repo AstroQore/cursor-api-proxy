@@ -1,5 +1,10 @@
 import type { CursorExecutionMode } from "./execution-mode.js";
-import { loadEnvConfig, resolveAgentCommand, type EnvOptions } from "./env.js";
+import {
+  loadEnvConfig,
+  resolveAgentCommand,
+  type EnvOptions,
+  type PromptFormat,
+} from "./env.js";
 
 export type { CursorExecutionMode } from "./execution-mode.js";
 
@@ -35,6 +40,10 @@ export type BridgeConfig = {
   verbose: boolean;
   /** When true, prepend a system guard that makes Cursor behave like a stateless API instead of a workspace-bound agent. */
   apiContextGuard: boolean;
+  /** When true, honor non-standard cwd/workspace request hints on the proxy host. */
+  allowWorkspaceHints: boolean;
+  /** How OpenAI messages are flattened before being sent to Cursor CLI. */
+  promptFormat: PromptFormat;
   /** When true, enable Cursor Max Mode (larger context, more tool calls) via cli-config.json preflight. */
   maxMode: boolean;
   /** When true, pass the user prompt via stdin instead of argv (avoids Windows argv issues). */
@@ -90,6 +99,8 @@ export function loadBridgeConfig(opts: EnvOptions = {}): BridgeConfig {
     chatOnlyWorkspaceExplicit: env.chatOnlyWorkspaceExplicit,
     verbose: env.verbose,
     apiContextGuard: env.apiContextGuard,
+    allowWorkspaceHints: env.allowWorkspaceHints,
+    promptFormat: env.promptFormat,
     maxMode: env.maxMode,
     promptViaStdin: env.promptViaStdin,
     useAcp: env.useAcp,

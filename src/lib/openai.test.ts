@@ -45,6 +45,29 @@ describe("buildPromptFromMessages", () => {
     );
   });
 
+  it("keeps a single user message raw in minimal prompt format", () => {
+    const prompt = buildPromptFromMessages(
+      [{ role: "user", content: "Hello Cursor model" }],
+      { promptFormat: "minimal" },
+    );
+    expect(prompt).toBe("Hello Cursor model");
+  });
+
+  it("uses bracketed roles without assistant prefill in minimal multi-turn prompt format", () => {
+    const prompt = buildPromptFromMessages(
+      [
+        { role: "system", content: "Be concise." },
+        { role: "user", content: "Hello" },
+        { role: "assistant", content: "Hi" },
+        { role: "user", content: "Continue" },
+      ],
+      { promptFormat: "minimal" },
+    );
+    expect(prompt).toBe(
+      "[System]\nBe concise.\n\n[User]\nHello\n\n[Assistant]\nHi\n\n[User]\nContinue",
+    );
+  });
+
   it("prepends system message", () => {
     const messages = [
       { role: "system", content: "You are helpful." },
