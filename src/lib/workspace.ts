@@ -9,6 +9,39 @@ export type WorkspaceResult = {
   tempDir?: string;
 };
 
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Array.isArray(value)) {
+      const hit = firstString(...value);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
+export function workspaceHintFromRequest(
+  headers: Record<string, string | string[] | undefined>,
+  body: Record<string, unknown>,
+): string | undefined {
+  const metadata =
+    body.metadata && typeof body.metadata === "object"
+      ? (body.metadata as Record<string, unknown>)
+      : undefined;
+  return firstString(
+    headers["x-cursor-workspace"],
+    headers["x-user-cwd"],
+    headers["x-workspace"],
+    headers["x-cwd"],
+    body.workspace,
+    body.cwd,
+    body.working_directory,
+    metadata?.workspace,
+    metadata?.cwd,
+    metadata?.working_directory,
+  );
+}
+
 /**
  * Env overrides for chat-only (isolated) workspace so the agent cannot load
  * rules from ~/.cursor or other user config paths.

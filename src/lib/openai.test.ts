@@ -61,12 +61,12 @@ describe("buildPromptFromMessages", () => {
     ];
     const prompt = buildPromptFromMessages(messages, { apiContextGuard: true });
     expect(prompt).toContain("OpenAI-compatible API bridge");
-    expect(prompt).toContain("Do not assume the user's current working directory");
+    expect(prompt).toContain("Use only the active workspace for this request");
     expect(prompt).toContain(
-      "Never reveal, quote, or reason from bridge workspace paths",
+      "Never reveal, quote, or reason from bridge-only temporary paths",
     );
     expect(prompt).toContain(
-      "System reminder: The bridge workspace/cwd is not the user's working directory",
+      "System reminder: Use the active workspace selected for this request",
     );
     expect(prompt.indexOf("OpenAI-compatible API bridge")).toBeLessThan(
       prompt.indexOf("You are helpful."),
@@ -75,6 +75,25 @@ describe("buildPromptFromMessages", () => {
       prompt.indexOf("User: Hi"),
     );
     expect(prompt).toContain("User: Hi");
+  });
+
+  it("warns when the guarded workspace is isolated", () => {
+    const prompt = buildPromptFromMessages(
+      [{ role: "user", content: "List this directory" }],
+      { apiContextGuard: true, workspaceKind: "isolated" },
+    );
+    expect(prompt).toContain("isolated temporary workspace");
+    expect(prompt).toContain("no project directory was provided");
+  });
+
+  it("allows an explicit guarded workspace to be inspected", () => {
+    const prompt = buildPromptFromMessages(
+      [{ role: "user", content: "List this directory" }],
+      { apiContextGuard: true, workspaceKind: "explicit" },
+    );
+    expect(prompt).toContain("explicit active workspace");
+    expect(prompt).toContain("inspect that active workspace");
+    expect(prompt).not.toContain("no project directory was provided");
   });
 
   it("joins multiple system messages with double newline", () => {

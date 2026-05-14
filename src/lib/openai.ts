@@ -1,15 +1,45 @@
-export const API_CONTEXT_GUARD_TEXT = [
+export type ApiContextWorkspaceKind = "isolated" | "explicit" | "configured";
+
+function buildApiContextGuardText(
+  workspaceKind: ApiContextWorkspaceKind = "configured",
+): string {
+  const parts = [
   "You are being called through an OpenAI-compatible API bridge.",
-  "Treat the bridge server process, Cursor runtime, workspace, cwd, and any cached Cursor session state as implementation details, not as the user's project context.",
-  "Do not assume the user's current working directory, repository, files, rules, or prior Cursor state unless they are explicitly included in this API request.",
-  "Never reveal, quote, or reason from bridge workspace paths such as /tmp/cursor-* or /tmp/cursor-api-proxy-workspace.",
-  "If asked about the current working directory, repository, or local files and they were not provided in the request messages, answer that the API request did not provide that information.",
-].join(" ");
+    "Treat cached Cursor session state, prior projects, global Cursor rules, and the bridge server process as implementation details, not as user-provided context.",
+    "Use only the active workspace for this request plus content explicitly included in the API messages. Do not assume any other cwd, repository, files, or prior Cursor state.",
+    "Never reveal, quote, or reason from bridge-only temporary paths such as /tmp/cursor-* or /tmp/cursor-api-proxy-workspace.",
+  ];
+
+  if (workspaceKind === "isolated") {
+    parts.push(
+      "This request is running in an isolated temporary workspace for safety; it is not the caller's project directory and may be empty.",
+      "If the user asks about this/current directory without supplying a path, file list, or explicit workspace, explain that no project directory was provided instead of describing the temporary bridge directory.",
+    );
+  } else if (workspaceKind === "explicit") {
+    parts.push(
+      "The API request supplied an explicit active workspace for this run. If the user asks about this/current directory, inspect that active workspace.",
+      "Refer to it as the active workspace unless the user explicitly supplied or asked for the absolute path.",
+    );
+  } else {
+    parts.push(
+      "A configured active workspace exists on the proxy host for this run. If the user asks about this/current directory, you may inspect that active workspace.",
+      "Do not present the proxy process cwd or stale cached Cursor project state as the user's local shell cwd.",
+    );
+  }
+
+  return parts.join(" ");
+}
 
 export type OpenAiChatCompletionRequest = {
   model?: string;
   /** Cursor CLI mode override: agent | ask | plan */
   mode?: string;
+  /** Optional proxy-host workspace path for this request. */
+  workspace?: string;
+  /** Alias for workspace; useful for clients that naturally pass cwd metadata. */
+  cwd?: string;
+  /** Optional metadata bag; `metadata.cwd` and `metadata.workspace` are recognized. */
+  metadata?: Record<string, unknown>;
   messages: any[];
   stream?: boolean;
   tools?: any[];
@@ -98,10 +128,13 @@ export function toolsToSystemText(
 
 export function buildPromptFromMessages(
   messages: any[],
-  opts: { apiContextGuard?: boolean } = {},
+  opts: {
+    apiContextGuard?: boolean;
+    workspaceKind?: ApiContextWorkspaceKind;
+  } = {},
 ): string {
   const systemParts: string[] = opts.apiContextGuard
-    ? [API_CONTEXT_GUARD_TEXT]
+    ? [buildApiContextGuardText(opts.workspaceKind)]
     : [];
   const convo: string[] = [];
 
@@ -133,7 +166,7 @@ export function buildPromptFromMessages(
     : "";
   const transcript = convo.join("\n\n");
   const apiContextReminder = opts.apiContextGuard
-    ? "\n\nSystem reminder: The bridge workspace/cwd is not the user's working directory. Do not disclose bridge workspace paths. If the user did not provide a cwd, repository, or file contents in this API request, say that information is unavailable."
+    ? "\n\nSystem reminder: Use the active workspace selected for this request when file inspection is requested. Do not disclose bridge-only temporary paths or rely on stale Cursor workspace state."
     : "";
   return system + transcript + apiContextReminder + "\n\nAssistant:";
 }

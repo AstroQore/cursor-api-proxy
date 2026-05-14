@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
-import { getChatOnlyEnvOverrides, resolveWorkspace } from "./workspace.js";
+import {
+  getChatOnlyEnvOverrides,
+  resolveWorkspace,
+  workspaceHintFromRequest,
+} from "./workspace.js";
 import type { BridgeConfig } from "./config.js";
 
 function baseConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
@@ -85,5 +89,25 @@ describe("resolveWorkspace", () => {
     const cfg = baseConfig({ workspace: tmp });
     const { workspaceDir } = resolveWorkspace(cfg, sub);
     expect(fs.realpathSync(workspaceDir)).toBe(fs.realpathSync(sub));
+  });
+});
+
+describe("workspaceHintFromRequest", () => {
+  it("prefers explicit workspace headers", () => {
+    expect(
+      workspaceHintFromRequest(
+        { "x-cursor-workspace": "/repo/from-header" },
+        { workspace: "/repo/from-body" },
+      ),
+    ).toBe("/repo/from-header");
+  });
+
+  it("accepts body and metadata cwd aliases", () => {
+    expect(workspaceHintFromRequest({}, { cwd: "/repo/from-cwd" })).toBe(
+      "/repo/from-cwd",
+    );
+    expect(
+      workspaceHintFromRequest({}, { metadata: { cwd: "/repo/from-meta" } }),
+    ).toBe("/repo/from-meta");
   });
 });

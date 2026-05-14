@@ -237,6 +237,7 @@ CLI flags:
 Optional per-request overrides:
 
 - Header **`X-Cursor-Workspace: <path>`** — use a subdirectory of `CURSOR_BRIDGE_WORKSPACE` (requires real workspace: set `CURSOR_BRIDGE_CHAT_ONLY_WORKSPACE=false` or use a non-`ask` mode without forcing chat-only; path must exist on the proxy host).
+- JSON body **`cwd`**, **`workspace`**, **`working_directory`**, **`metadata.cwd`**, or **`metadata.workspace`** — same as `X-Cursor-Workspace`. This is useful for OpenAI-compatible clients that can pass `extra_body` but not custom headers. An explicit workspace overrides chat-only temp workspace for that request.
 - Header **`X-Cursor-Mode: <agent|ask|plan>`** or JSON body field **`mode`** — execution mode for that request (body wins over header).
 
 **CLI subcommands** (see `cursor-api-proxy --help`): `login <name>`, `accounts` (list), `logout`, `usage`, `reset-hwid` (see `--help` for options). Flags above still apply to the server entrypoint.

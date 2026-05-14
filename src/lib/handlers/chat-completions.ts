@@ -27,7 +27,7 @@ import {
 } from "../request-log.js";
 import { rememberResolvedModel, resolveModel } from "../resolve-model.js";
 import { resolveRequestMode } from "../resolve-mode.js";
-import { resolveWorkspace } from "../workspace.js";
+import { resolveWorkspace, workspaceHintFromRequest } from "../workspace.js";
 import { sanitizeMessages } from "../sanitize.js";
 import {
   getNextAccountConfigDir,
@@ -83,14 +83,6 @@ export async function handleChatCompletions(
 
   const cleanMessages = sanitizeMessages(body.messages ?? []);
 
-  const toolsText = toolsToSystemText(body.tools, body.functions);
-  const messagesWithTools = toolsText
-    ? [{ role: "system", content: toolsText }, ...cleanMessages]
-    : cleanMessages;
-  const prompt = buildPromptFromMessages(messagesWithTools, {
-    apiContextGuard: config.apiContextGuard,
-  });
-
   const trafficMessages: TrafficMessage[] = cleanMessages.map((m: any) => {
     const content =
       typeof m?.content === "string"
@@ -123,16 +115,21 @@ export async function handleChatCompletions(
     return;
   }
 
-  const effectiveChatOnly =
-    mode === "ask"
+  const workspaceHint = workspaceHintFromRequest(
+    req.headers as Record<string, string | string[] | undefined>,
+    body as Record<string, unknown>,
+  );
+  const hasExplicitWorkspace = !!workspaceHint;
+  const effectiveChatOnly = hasExplicitWorkspace
+    ? false
+    : mode === "ask"
       ? config.chatOnlyWorkspace
       : config.chatOnlyWorkspaceExplicit && config.chatOnlyWorkspace;
 
-  const headerWs = req.headers["x-cursor-workspace"];
   let workspaceDir: string;
   let tempDir: string | undefined;
   try {
-    const ws = resolveWorkspace(config, headerWs, effectiveChatOnly);
+    const ws = resolveWorkspace(config, workspaceHint, effectiveChatOnly);
     workspaceDir = ws.workspaceDir;
     tempDir = ws.tempDir;
   } catch (e) {
@@ -140,6 +137,19 @@ export async function handleChatCompletions(
     json(res, 400, { error: { message: msg, code: "invalid_workspace" } });
     return;
   }
+
+  const toolsText = toolsToSystemText(body.tools, body.functions);
+  const messagesWithTools = toolsText
+    ? [{ role: "system", content: toolsText }, ...cleanMessages]
+    : cleanMessages;
+  const prompt = buildPromptFromMessages(messagesWithTools, {
+    apiContextGuard: config.apiContextGuard,
+    workspaceKind: tempDir
+      ? "isolated"
+      : hasExplicitWorkspace
+        ? "explicit"
+        : "configured",
+  });
 
   const fixedArgs = buildAgentFixedArgs(
     config,

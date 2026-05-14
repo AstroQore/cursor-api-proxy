@@ -1,8 +1,13 @@
+import * as fs from "node:fs";
 import * as http from "node:http";
 import * as https from "node:https";
+import * as net from "node:net";
+import * as os from "node:os";
+import * as path from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { startBridgeServer } from "./server.js";
 import type { BridgeConfig } from "./config.js";
+import { run } from "./process.js";
 
 vi.mock("./cursor-cli.js", () => ({
   listCursorCliModels: vi.fn().mockResolvedValue([
@@ -112,6 +117,24 @@ async function fetchServer(
     if (options.body) req.write(options.body);
     req.end();
   });
+}
+
+function canListen(port: number): Promise<boolean> {
+  const server = net.createServer();
+  return new Promise((resolve) => {
+    server.once("error", () => resolve(false));
+    server.listen(port, "127.0.0.1", () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function findFreePortPair(): Promise<number> {
+  for (let i = 0; i < 50; i += 1) {
+    const port = 20_000 + Math.floor(Math.random() * 20_000);
+    if ((await canListen(port)) && (await canListen(port + 1))) return port;
+  }
+  throw new Error("Could not find a free port pair");
 }
 
 describe("startBridgeServer", () => {
@@ -307,13 +330,47 @@ describe("startBridgeServer", () => {
     expect(data.error.code).toBe("invalid_mode");
   });
 
+  it("uses body cwd as an explicit workspace even when chat-only is configured", async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-ws-base-"));
+    const sub = path.join(base, "project");
+    fs.mkdirSync(sub, { recursive: true });
+    servers = startBridgeServer({
+      version: "1.0.0",
+      config: createTestConfig({
+        workspace: base,
+        chatOnlyWorkspace: true,
+        chatOnlyWorkspaceExplicit: true,
+      }),
+    });
+    await new Promise<void>((resolve) =>
+      servers[0].on("listening", () => resolve()),
+    );
+
+    const { status } = await fetchServer(servers[0], "/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "claude-3-opus",
+        cwd: sub,
+        messages: [{ role: "user", content: "List this directory" }],
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(status).toBe(200);
+    const runCall = vi.mocked(run).mock.calls.at(-1);
+    expect(runCall?.[2]?.cwd).toBe(fs.realpathSync(sub));
+    expect(runCall?.[1]).toContain(fs.realpathSync(sub));
+    expect(runCall?.[2]?.envOverrides).toBeUndefined();
+  });
+
   it("should spawn multiple servers when multiPort is true", async () => {
+    const port = await findFreePortPair();
     servers = startBridgeServer({
       version: "1.0.0",
       config: createTestConfig({
         configDirs: ["/dir1", "/dir2"],
         multiPort: true,
-        port: 10000,
+        port,
       }),
     });
 
