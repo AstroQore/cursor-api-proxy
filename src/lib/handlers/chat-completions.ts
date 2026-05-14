@@ -153,7 +153,9 @@ export async function handleChatCompletions(
         ? "explicit"
         : "configured",
   });
-  const trustWorkspace = effectiveChatOnly || hasExplicitWorkspace;
+  const trustWorkspace =
+    (effectiveChatOnly && config.trustChatOnlyWorkspace) ||
+    hasExplicitWorkspace;
 
   const fixedArgs = buildAgentFixedArgs(
     config,

@@ -27,6 +27,7 @@ function baseConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     sessionsLogPath: "/tmp/sessions.log",
     chatOnlyWorkspace: false,
     chatOnlyWorkspaceExplicit: false,
+    trustChatOnlyWorkspace: true,
     verbose: false,
     apiContextGuard: false,
     allowWorkspaceHints: false,

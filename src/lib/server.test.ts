@@ -69,6 +69,7 @@ function createTestConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     sessionsLogPath: tmpLogPath,
     chatOnlyWorkspace: true,
     chatOnlyWorkspaceExplicit: false,
+    trustChatOnlyWorkspace: true,
     verbose: false,
     apiContextGuard: false,
     allowWorkspaceHints: false,
@@ -362,6 +363,34 @@ describe("startBridgeServer", () => {
     const runCall = vi.mocked(run).mock.calls.at(-1);
     expect(runCall?.[2]?.cwd).not.toBe(fs.realpathSync(sub));
     expect(runCall?.[1]).not.toContain(fs.realpathSync(sub));
+    expect(runCall?.[2]?.envOverrides).toBeDefined();
+  });
+
+  it("can omit --trust for isolated chat-only workspaces", async () => {
+    servers = startBridgeServer({
+      version: "1.0.0",
+      config: createTestConfig({
+        chatOnlyWorkspace: true,
+        chatOnlyWorkspaceExplicit: true,
+        trustChatOnlyWorkspace: false,
+      }),
+    });
+    await new Promise<void>((resolve) =>
+      servers[0].on("listening", () => resolve()),
+    );
+
+    const { status } = await fetchServer(servers[0], "/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "claude-3-opus",
+        messages: [{ role: "user", content: "List this directory" }],
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(status).toBe(200);
+    const runCall = vi.mocked(run).mock.calls.at(-1);
+    expect(runCall?.[1]).not.toContain("--trust");
     expect(runCall?.[2]?.envOverrides).toBeDefined();
   });
 

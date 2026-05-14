@@ -36,6 +36,8 @@ export type LoadedEnv = {
   chatOnlyWorkspace: boolean;
   /** True when CURSOR_BRIDGE_CHAT_ONLY_WORKSPACE key exists in env. */
   chatOnlyWorkspaceExplicit: boolean;
+  /** When true, pass --trust for isolated chat-only workspaces. */
+  trustChatOnlyWorkspace: boolean;
   mode?: CursorExecutionMode;
   verbose: boolean;
   /** When true, prepend a guard that strips bridge workspace assumptions from the prompt. */
@@ -296,6 +298,11 @@ export function loadEnvConfig(opts: EnvOptions = {}): LoadedEnv {
     chatOnlyWorkspace: envBool(
       env,
       ["CURSOR_BRIDGE_CHAT_ONLY_WORKSPACE"],
+      true,
+    ),
+    trustChatOnlyWorkspace: envBool(
+      env,
+      ["CURSOR_BRIDGE_TRUST_CHAT_ONLY_WORKSPACE"],
       true,
     ),
     mode,
