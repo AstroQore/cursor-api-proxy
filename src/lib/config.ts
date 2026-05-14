@@ -38,6 +38,8 @@ export type BridgeConfig = {
   chatOnlyWorkspaceExplicit: boolean;
   /** When true, pass --trust for isolated chat-only workspaces. */
   trustChatOnlyWorkspace: boolean;
+  /** When true, do not place Cursor config scaffolding in the temporary workspace. */
+  emptyChatOnlyWorkspace: boolean;
   /** When true, print full request/response content to stdout for each completion. */
   verbose: boolean;
   /** When true, prepend a system guard that makes Cursor behave like a stateless API instead of a workspace-bound agent. */
@@ -100,6 +102,7 @@ export function loadBridgeConfig(opts: EnvOptions = {}): BridgeConfig {
     chatOnlyWorkspace: env.chatOnlyWorkspace,
     chatOnlyWorkspaceExplicit: env.chatOnlyWorkspaceExplicit,
     trustChatOnlyWorkspace: env.trustChatOnlyWorkspace,
+    emptyChatOnlyWorkspace: env.emptyChatOnlyWorkspace,
     verbose: env.verbose,
     apiContextGuard: env.apiContextGuard,
     allowWorkspaceHints: env.allowWorkspaceHints,

@@ -91,6 +91,9 @@ export function resolveWorkspace(
       : config.chatOnlyWorkspace;
   if (useChatOnly) {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-proxy-"));
+    if (config.emptyChatOnlyWorkspace) {
+      return { workspaceDir: tempDir, tempDir };
+    }
     const cursorDir = path.join(tempDir, ".cursor");
     fs.mkdirSync(cursorDir, { recursive: true });
     fs.mkdirSync(path.join(cursorDir, "rules"), { recursive: true });

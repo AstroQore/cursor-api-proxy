@@ -70,6 +70,7 @@ function createTestConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     chatOnlyWorkspace: true,
     chatOnlyWorkspaceExplicit: false,
     trustChatOnlyWorkspace: true,
+    emptyChatOnlyWorkspace: false,
     verbose: false,
     apiContextGuard: false,
     allowWorkspaceHints: false,

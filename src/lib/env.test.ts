@@ -22,6 +22,7 @@ describe("loadEnvConfig", () => {
     expect(loaded.chatOnlyWorkspace).toBe(true);
     expect(loaded.chatOnlyWorkspaceExplicit).toBe(false);
     expect(loaded.trustChatOnlyWorkspace).toBe(true);
+    expect(loaded.emptyChatOnlyWorkspace).toBe(false);
     expect(loaded.mode).toBeUndefined();
     expect(loaded.verbose).toBe(false);
     expect(loaded.commandShell).toBe("cmd.exe");
@@ -77,12 +78,14 @@ describe("loadEnvConfig", () => {
         CURSOR_BRIDGE_ALLOW_WORKSPACE_HINTS: "true",
         CURSOR_BRIDGE_PROMPT_FORMAT: "minimal",
         CURSOR_BRIDGE_TRUST_CHAT_ONLY_WORKSPACE: "false",
+        CURSOR_BRIDGE_EMPTY_CHAT_ONLY_WORKSPACE: "true",
       },
     });
 
     expect(loaded.allowWorkspaceHints).toBe(true);
     expect(loaded.promptFormat).toBe("minimal");
     expect(loaded.trustChatOnlyWorkspace).toBe(false);
+    expect(loaded.emptyChatOnlyWorkspace).toBe(true);
   });
 
   it("parses CURSOR_BRIDGE_MODE and marks chat-only env as explicit", () => {

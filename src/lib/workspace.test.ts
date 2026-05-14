@@ -28,6 +28,7 @@ function baseConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     chatOnlyWorkspace: false,
     chatOnlyWorkspaceExplicit: false,
     trustChatOnlyWorkspace: true,
+    emptyChatOnlyWorkspace: false,
     verbose: false,
     apiContextGuard: false,
     allowWorkspaceHints: false,
@@ -66,6 +67,17 @@ describe("resolveWorkspace", () => {
     const { workspaceDir, tempDir } = resolveWorkspace(cfg, undefined);
     expect(tempDir).toBeDefined();
     expect(workspaceDir).toContain("cursor-proxy-");
+  });
+
+  it("can keep the chat-only workspace empty", () => {
+    const cfg = baseConfig({
+      chatOnlyWorkspace: true,
+      emptyChatOnlyWorkspace: true,
+    });
+    const { workspaceDir, tempDir } = resolveWorkspace(cfg, undefined);
+    expect(tempDir).toBeDefined();
+    expect(workspaceDir).toContain("cursor-proxy-");
+    expect(fs.readdirSync(workspaceDir)).toEqual([]);
   });
 
   it("uses real workspace when effectiveChatOnly is false despite config.chatOnlyWorkspace", () => {

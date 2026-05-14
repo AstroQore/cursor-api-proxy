@@ -38,6 +38,8 @@ export type LoadedEnv = {
   chatOnlyWorkspaceExplicit: boolean;
   /** When true, pass --trust for isolated chat-only workspaces. */
   trustChatOnlyWorkspace: boolean;
+  /** When true, do not place Cursor config scaffolding in the temporary workspace. */
+  emptyChatOnlyWorkspace: boolean;
   mode?: CursorExecutionMode;
   verbose: boolean;
   /** When true, prepend a guard that strips bridge workspace assumptions from the prompt. */
@@ -304,6 +306,11 @@ export function loadEnvConfig(opts: EnvOptions = {}): LoadedEnv {
       env,
       ["CURSOR_BRIDGE_TRUST_CHAT_ONLY_WORKSPACE"],
       true,
+    ),
+    emptyChatOnlyWorkspace: envBool(
+      env,
+      ["CURSOR_BRIDGE_EMPTY_CHAT_ONLY_WORKSPACE"],
+      false,
     ),
     mode,
     verbose: envBool(env, ["CURSOR_BRIDGE_VERBOSE"], false),
