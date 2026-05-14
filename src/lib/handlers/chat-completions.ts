@@ -87,7 +87,9 @@ export async function handleChatCompletions(
   const messagesWithTools = toolsText
     ? [{ role: "system", content: toolsText }, ...cleanMessages]
     : cleanMessages;
-  const prompt = buildPromptFromMessages(messagesWithTools);
+  const prompt = buildPromptFromMessages(messagesWithTools, {
+    apiContextGuard: config.apiContextGuard,
+  });
 
   const trafficMessages: TrafficMessage[] = cleanMessages.map((m: any) => {
     const content =

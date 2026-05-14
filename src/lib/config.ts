@@ -33,6 +33,8 @@ export type BridgeConfig = {
   chatOnlyWorkspaceExplicit: boolean;
   /** When true, print full request/response content to stdout for each completion. */
   verbose: boolean;
+  /** When true, prepend a system guard that makes Cursor behave like a stateless API instead of a workspace-bound agent. */
+  apiContextGuard: boolean;
   /** When true, enable Cursor Max Mode (larger context, more tool calls) via cli-config.json preflight. */
   maxMode: boolean;
   /** When true, pass the user prompt via stdin instead of argv (avoids Windows argv issues). */
@@ -87,6 +89,7 @@ export function loadBridgeConfig(opts: EnvOptions = {}): BridgeConfig {
     chatOnlyWorkspace: env.chatOnlyWorkspace,
     chatOnlyWorkspaceExplicit: env.chatOnlyWorkspaceExplicit,
     verbose: env.verbose,
+    apiContextGuard: env.apiContextGuard,
     maxMode: env.maxMode,
     promptViaStdin: env.promptViaStdin,
     useAcp: env.useAcp,

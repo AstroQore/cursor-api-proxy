@@ -37,6 +37,8 @@ export type LoadedEnv = {
   chatOnlyWorkspaceExplicit: boolean;
   mode?: CursorExecutionMode;
   verbose: boolean;
+  /** When true, prepend a guard that strips bridge workspace assumptions from the prompt. */
+  apiContextGuard: boolean;
   /** When true, set maxMode in cli-config.json before each run (larger context, more tools). */
   maxMode: boolean;
   /** When true, pass the user prompt via stdin instead of argv (avoids Windows argv truncation). */
@@ -287,6 +289,7 @@ export function loadEnvConfig(opts: EnvOptions = {}): LoadedEnv {
     ),
     mode,
     verbose: envBool(env, ["CURSOR_BRIDGE_VERBOSE"], false),
+    apiContextGuard: envBool(env, ["CURSOR_BRIDGE_API_CONTEXT_GUARD"], false),
     maxMode: envBool(env, ["CURSOR_BRIDGE_MAX_MODE"], false),
     promptViaStdin: envBool(env, ["CURSOR_BRIDGE_PROMPT_VIA_STDIN"], false),
     useAcp: envBool(env, ["CURSOR_BRIDGE_USE_ACP"], false),

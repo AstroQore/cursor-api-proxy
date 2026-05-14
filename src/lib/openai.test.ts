@@ -54,6 +54,29 @@ describe("buildPromptFromMessages", () => {
     expect(prompt).toBe("System:\nYou are helpful.\n\nUser: Hi\n\nAssistant:");
   });
 
+  it("can prepend an API context guard before request system messages", () => {
+    const messages = [
+      { role: "system", content: "You are helpful." },
+      { role: "user", content: "Hi" },
+    ];
+    const prompt = buildPromptFromMessages(messages, { apiContextGuard: true });
+    expect(prompt).toContain("OpenAI-compatible API bridge");
+    expect(prompt).toContain("Do not assume the user's current working directory");
+    expect(prompt).toContain(
+      "Never reveal, quote, or reason from bridge workspace paths",
+    );
+    expect(prompt).toContain(
+      "System reminder: The bridge workspace/cwd is not the user's working directory",
+    );
+    expect(prompt.indexOf("OpenAI-compatible API bridge")).toBeLessThan(
+      prompt.indexOf("You are helpful."),
+    );
+    expect(prompt.indexOf("System reminder:")).toBeGreaterThan(
+      prompt.indexOf("User: Hi"),
+    );
+    expect(prompt).toContain("User: Hi");
+  });
+
   it("joins multiple system messages with double newline", () => {
     const messages = [
       { role: "system", content: "First rule" },

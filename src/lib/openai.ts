@@ -1,3 +1,11 @@
+export const API_CONTEXT_GUARD_TEXT = [
+  "You are being called through an OpenAI-compatible API bridge.",
+  "Treat the bridge server process, Cursor runtime, workspace, cwd, and any cached Cursor session state as implementation details, not as the user's project context.",
+  "Do not assume the user's current working directory, repository, files, rules, or prior Cursor state unless they are explicitly included in this API request.",
+  "Never reveal, quote, or reason from bridge workspace paths such as /tmp/cursor-* or /tmp/cursor-api-proxy-workspace.",
+  "If asked about the current working directory, repository, or local files and they were not provided in the request messages, answer that the API request did not provide that information.",
+].join(" ");
+
 export type OpenAiChatCompletionRequest = {
   model?: string;
   /** Cursor CLI mode override: agent | ask | plan */
@@ -88,8 +96,13 @@ export function toolsToSystemText(
   return lines.join("\n");
 }
 
-export function buildPromptFromMessages(messages: any[]): string {
-  const systemParts: string[] = [];
+export function buildPromptFromMessages(
+  messages: any[],
+  opts: { apiContextGuard?: boolean } = {},
+): string {
+  const systemParts: string[] = opts.apiContextGuard
+    ? [API_CONTEXT_GUARD_TEXT]
+    : [];
   const convo: string[] = [];
 
   for (const m of messages || []) {
@@ -119,5 +132,8 @@ export function buildPromptFromMessages(messages: any[]): string {
     ? `System:\n${systemParts.join("\n\n")}\n\n`
     : "";
   const transcript = convo.join("\n\n");
-  return system + transcript + "\n\nAssistant:";
+  const apiContextReminder = opts.apiContextGuard
+    ? "\n\nSystem reminder: The bridge workspace/cwd is not the user's working directory. Do not disclose bridge workspace paths. If the user did not provide a cwd, repository, or file contents in this API request, say that information is unavailable."
+    : "";
+  return system + transcript + apiContextReminder + "\n\nAssistant:";
 }

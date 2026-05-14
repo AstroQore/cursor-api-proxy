@@ -24,6 +24,7 @@ function baseConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     chatOnlyWorkspace: false,
     chatOnlyWorkspaceExplicit: false,
     verbose: false,
+    apiContextGuard: false,
     maxMode: false,
     promptViaStdin: false,
     useAcp: false,
