@@ -16,7 +16,9 @@ export function buildAgentFixedArgs(
   if (config.approveMcps) args.push("--approve-mcps");
   if (config.force) args.push("--force");
   if (trustWorkspace) args.push("--trust");
-  args.push("--mode", mode);
+  // Current Cursor Agent CLI treats the default mode as full agent mode;
+  // it only accepts explicit --mode values for read-only plan/ask.
+  if (mode !== "agent") args.push("--mode", mode);
   args.push("--workspace", workspaceDir);
   args.push("--model", model);
   if (stream) {

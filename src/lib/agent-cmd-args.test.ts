@@ -36,7 +36,7 @@ function cfg(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
 }
 
 describe("buildAgentFixedArgs", () => {
-  it("passes --mode and --trust when the workspace is trusted", () => {
+  it("omits explicit agent mode and passes --trust when the workspace is trusted", () => {
     const args = buildAgentFixedArgs(
       cfg(),
       "/ws",
@@ -45,8 +45,7 @@ describe("buildAgentFixedArgs", () => {
       "agent",
       true,
     );
-    expect(args).toContain("--mode");
-    expect(args[args.indexOf("--mode") + 1]).toBe("agent");
+    expect(args).not.toContain("--mode");
     expect(args).toContain("--trust");
   });
 
