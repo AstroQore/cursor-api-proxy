@@ -10,12 +10,12 @@ export function buildAgentFixedArgs(
   model: string,
   stream: boolean,
   mode: CursorExecutionMode,
-  effectiveChatOnly: boolean,
+  trustWorkspace: boolean,
 ): string[] {
   const args = ["--print"];
   if (config.approveMcps) args.push("--approve-mcps");
   if (config.force) args.push("--force");
-  if (effectiveChatOnly) args.push("--trust");
+  if (trustWorkspace) args.push("--trust");
   args.push("--mode", mode);
   args.push("--workspace", workspaceDir);
   args.push("--model", model);
@@ -37,7 +37,7 @@ export function buildAgentCmdArgs(
   prompt: string,
   stream: boolean,
   mode: CursorExecutionMode,
-  effectiveChatOnly: boolean,
+  trustWorkspace: boolean,
 ): string[] {
   return [
     ...buildAgentFixedArgs(
@@ -46,7 +46,7 @@ export function buildAgentCmdArgs(
       model,
       stream,
       mode,
-      effectiveChatOnly,
+      trustWorkspace,
     ),
     prompt,
   ];

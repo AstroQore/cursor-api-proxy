@@ -36,7 +36,7 @@ function cfg(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
 }
 
 describe("buildAgentFixedArgs", () => {
-  it("passes --mode and --trust when effectiveChatOnly", () => {
+  it("passes --mode and --trust when the workspace is trusted", () => {
     const args = buildAgentFixedArgs(
       cfg(),
       "/ws",
@@ -50,7 +50,7 @@ describe("buildAgentFixedArgs", () => {
     expect(args).toContain("--trust");
   });
 
-  it("omits --trust when not effectiveChatOnly", () => {
+  it("omits --trust when the workspace is not trusted", () => {
     const args = buildAgentFixedArgs(
       cfg({ chatOnlyWorkspace: true }),
       "/ws",

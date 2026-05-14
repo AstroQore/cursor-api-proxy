@@ -150,6 +150,7 @@ export async function handleChatCompletions(
         ? "explicit"
         : "configured",
   });
+  const trustWorkspace = effectiveChatOnly || hasExplicitWorkspace;
 
   const fixedArgs = buildAgentFixedArgs(
     config,
@@ -157,7 +158,7 @@ export async function handleChatCompletions(
     cursorModel,
     !!body.stream,
     mode,
-    effectiveChatOnly,
+    trustWorkspace,
   );
   const fit = fitPromptToWinCmdline(config.agentBin, fixedArgs, prompt, {
     maxCmdline: config.winCmdlineMax,

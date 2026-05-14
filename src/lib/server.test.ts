@@ -360,6 +360,7 @@ describe("startBridgeServer", () => {
     const runCall = vi.mocked(run).mock.calls.at(-1);
     expect(runCall?.[2]?.cwd).toBe(fs.realpathSync(sub));
     expect(runCall?.[1]).toContain(fs.realpathSync(sub));
+    expect(runCall?.[1]).toContain("--trust");
     expect(runCall?.[2]?.envOverrides).toBeUndefined();
   });
 
